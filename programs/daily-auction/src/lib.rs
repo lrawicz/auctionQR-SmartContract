@@ -1,12 +1,15 @@
 use anchor_lang::prelude::*;
-// use solana_system_interface::instruction as system_instruction;
-use anchor_lang::solana_program::{program::invoke, system_instruction};
+use anchor_lang::solana_program::{
+    program::{invoke, invoke_signed}, // <--- MODIFICADO (añadido invoke_signed para claridad)
+    system_instruction,
+};
 
-declare_id!("BxDvT9XonDvex92E6DebkHHfEQaNra6eKK3FdUcD7qQ6"); // Reemplazar con el ID de tu programa
+declare_id!("BxDvT9XonDvex92E6DebkHHfEQaNra6eKK3FdUcD7qQ6");
 
 #[program]
 pub mod daily_auction {
     use super::*;
+
     pub fn initialize(ctx: Context<Initialize>, initial_content: String) -> Result<()> {
         let auction = &mut ctx.accounts.auction;
         auction.authority = *ctx.accounts.authority.key;
@@ -18,8 +21,11 @@ pub mod daily_auction {
         auction.is_active = true;
         auction.highest_bid = 0;
         auction.highest_bidder = Pubkey::default();
+        auction.bump = ctx.bumps.auction;
+
         Ok(())
     }
+
     pub fn start_auction(ctx: Context<ManageStartAuction>) -> Result<()> {
         let auction = &mut ctx.accounts.auction;
         require!(!auction.is_active, AuctionError::AuctionAlreadyActive);
@@ -33,21 +39,40 @@ pub mod daily_auction {
         msg!("Nueva subasta iniciada. Finaliza en 24 horas.");
         Ok(())
     }
+
     pub fn end_auction(ctx: Context<ManageEndAuction>) -> Result<()> {
         let auction = &mut ctx.accounts.auction;
         let clock = Clock::get()?;
 
         require!(auction.is_active, AuctionError::AuctionNotActive);
-        //testing
         // require!(
         //     clock.unix_timestamp >= auction.end_timestamp,
         //     AuctionError::AuctionNotOver
         // );
 
-        // Pagar a la autoridad desde la cuenta de la subasta.
+        // <--- MODIFICADO: Transferencia a la autoridad usando invoke_signed
         if auction.highest_bid > 0 {
-            **auction.to_account_info().try_borrow_mut_lamports()? -= auction.highest_bid;
-            **ctx.accounts.authority.try_borrow_mut_lamports()? += auction.highest_bid;
+            let amount_to_pay = auction.highest_bid;
+            let seeds = &[
+                b"auction".as_ref(),
+                &[auction.bump]
+            ];
+
+            let transfer_to_authority_ix = system_instruction::transfer(
+                &auction.key(),
+                &ctx.accounts.authority.key(),
+                amount_to_pay,
+            );
+
+            invoke_signed(
+                &transfer_to_authority_ix,
+                &[
+                    auction.to_account_info(),
+                    ctx.accounts.authority.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+                &[seeds],
+            )?;
         }
 
         auction.is_active = false;
@@ -56,6 +81,7 @@ pub mod daily_auction {
         msg!("Subasta finalizada. Ganador: {}", auction.highest_bidder);
         Ok(())
     }
+
     pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
         let clock = Clock::get()?;
         let bidder = &ctx.accounts.bidder;
@@ -64,7 +90,6 @@ pub mod daily_auction {
 
         require!(new_content.len() <= 250, AuctionError::ContentTooLong);
         require!(auction.is_active, AuctionError::AuctionNotActive);
-        //testing
         // require!(
         //     clock.unix_timestamp < auction.end_timestamp,
         //     AuctionError::AuctionEnded
@@ -78,12 +103,29 @@ pub mod daily_auction {
                 AuctionError::InvalidOldBidderAccount
             );
 
-            let previous_bidder_account_info = ctx.accounts.old_bidder.to_account_info();
-
             let amount_to_return = auction.highest_bid;
 
-            **auction.to_account_info().try_borrow_mut_lamports()? -= amount_to_return;
-            **previous_bidder_account_info.try_borrow_mut_lamports()? += amount_to_return;
+            let transfer_to_old_bidder_ix = system_instruction::transfer(
+                &auction.key(),
+                &old_bidder.key(),
+                amount_to_return,
+            );
+            
+            // <--- MODIFICADO: Seeds correctas para la PDA
+            let auction_seeds = &[
+                b"auction".as_ref(),
+                &[auction.bump]
+            ];
+
+            invoke_signed(
+                &transfer_to_old_bidder_ix,
+                &[
+                    auction.to_account_info(),
+                    old_bidder.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+                &[auction_seeds],
+            )?;
         }
 
         // Transferir la nueva oferta a la cuenta de la subasta.
@@ -110,24 +152,31 @@ pub mod daily_auction {
         );
         Ok(())
     }
-
 }
 
 #[account]
 pub struct Auction {
-    pub authority: Pubkey,      // La cuenta que recibe los fondos de la subasta.
-    pub new_content: String,    // El string que se está subastando.
-    pub old_content: String,    // El string anterior que se subastó.
-    pub end_timestamp: i64,     // Momento en que finaliza la subasta (en formato Unix timestamp).
-    pub highest_bid: u64,       // La puja más alta actual (en lamports).
-    pub highest_bidder: Pubkey, // La clave pública del mejor postor.
-    pub is_active: bool,        // Un booleano para saber si la subasta está en curso.
+    pub authority: Pubkey,
+    pub new_content: String,
+    pub old_content: String,
+    pub end_timestamp: i64,
+    pub highest_bid: u64,
+    pub highest_bidder: Pubkey,
+    pub is_active: bool,
+    pub bump: u8, // <--- MODIFICADO: Campo para el bump
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    // Espacio para los strings y otros datos
-    #[account(init, payer = authority, space = 8 + 32 + (4+250)+ (4+250) + 8 + 8 + 32 + 1)]
+    #[account(
+        init,
+        payer = authority,
+        // <--- MODIFICADO: Espacio aumentado en 1 byte para el bump
+        space = 8 + 32 + (4+250)+ (4+250) + 8 + 8 + 32 + 1 + 1,
+        // <--- MODIFICADO: Definición de seeds y bump para crear la PDA
+        seeds = [b"auction".as_ref()],
+        bump
+    )]
     pub auction: Account<'info, Auction>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -136,22 +185,40 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct ManageStartAuction<'info> {
-    #[account(mut, has_one = authority)]
+    #[account(
+        mut,
+        // <--- MODIFICADO: Constraints para verificar la PDA
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump,
+        has_one = authority
+    )]
     pub auction: Account<'info, Auction>,
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct ManageEndAuction<'info> {
-    #[account(mut, has_one = authority)]
+    #[account(
+        mut,
+        // <--- MODIFICADO: Constraints para verificar la PDA
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump,
+        has_one = authority
+    )]
     pub auction: Account<'info, Auction>,
     #[account(mut)]
     pub authority: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct Bid<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        // <--- MODIFICADO: Constraints para verificar la PDA
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump
+    )]
     pub auction: Account<'info, Auction>,
     #[account(mut)]
     pub bidder: Signer<'info>,
