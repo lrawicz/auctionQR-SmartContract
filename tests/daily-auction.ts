@@ -8,7 +8,7 @@ describe("daily-auction", async() => {
 
   const program = anchor.workspace.dailyAuction as Program<DailyAuction>;
 
-  const auctionAccount = anchor.web3.Keypair.generate();
+  const [auctionAccountPda, auctionAccountBump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("auction")], program.programId);
   const initialContent = "Hello World";
   const acounts = [anchor.web3.Keypair.generate(), anchor.web3.Keypair.generate(), anchor.web3.Keypair.generate()];
   it("01 - airdrop", async () => {
@@ -24,22 +24,22 @@ describe("daily-auction", async() => {
     const tx = await program.methods
       .initialize(initialContent)
       .accounts({
-        auction: auctionAccount.publicKey,
+        auction: auctionAccountPda,
         authority: program.provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([auctionAccount])
+      
       .rpc();
     console.log("");
     console.log("");
     console.log("STEP 01------------------------------------");
     console.log("Your transaction signature", tx);
 
-    const auction = await program.account.auction.fetch(auctionAccount.publicKey);
+    const auction = await program.account.auction.fetch(auctionAccountPda);
     console.log("Auction data:", auction);
   });
   it(" TEST01", async () => {
-    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccount.publicKey);
+    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccountPda);
     if (auctionInfo) {
       console.log("Auction account balance (lamports):", auctionInfo.lamports);
       console.log("Auction account balance (SOL):", auctionInfo.lamports / anchor.web3.LAMPORTS_PER_SOL);
@@ -52,10 +52,13 @@ describe("daily-auction", async() => {
     const bidAmount = new anchor.BN(100000000); // 0.1 SOL
     const newContent = "New content for auction";
 
+    // For the first bid, oldBidder can be a dummy or default Pubkey
+    const oldBidderKey = anchor.web3.Keypair.generate().publicKey;
+
     const tx = await program.methods
       .bid(bidAmount, newContent)
       .accounts({
-        auction: auctionAccount.publicKey,
+        auction: auctionAccountPda.publicKey,
         bidder: acounts[0].publicKey, //bidder.publicKey,
         oldBidder: anchor.web3.Keypair.generate().publicKey, // Dummy account for first bid
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -68,8 +71,8 @@ describe("daily-auction", async() => {
     console.log("STEP 02------------------------------------");
     console.log("Your transaction signature", tx);
 
-    const auction = await program.account.auction.fetch(auctionAccount.publicKey);
-    console.log("Auction data after bid:", auction);
+    const auction = await program.account.auction.fetch(auctionAccountPda);
+    console.log("Auction data:", auction);
 
   });
   if (false)
@@ -81,7 +84,7 @@ describe("daily-auction", async() => {
       await program.methods
         .bid(bidAmount, newContent)
         .accounts({
-          auction: auctionAccount.publicKey,
+          auction: auctionAccountPda,
           bidder: acounts[1].publicKey,
           oldBidder: acounts[0].publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -105,11 +108,11 @@ describe("daily-auction", async() => {
     }
   })
   it(" 05 - get data", async () => {
-    const auction = await program.account.auction.fetch(auctionAccount.publicKey);
+    const auction = await program.account.auction.fetch(auctionAccountPda);
     console.log("Auction data:", auction);
     console.log(acounts.map(a => a.publicKey.toBase58()));
 
-    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccount.publicKey);
+    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccountPda);
     if (auctionInfo) {
       console.log("Auction account balance (lamports):", auctionInfo.lamports);
       console.log("Auction account balance (SOL):", auctionInfo.lamports / anchor.web3.LAMPORTS_PER_SOL);
@@ -121,14 +124,34 @@ describe("daily-auction", async() => {
   it(" 06 - Allows a bid to be placed", async () => {
     const bidAmount = new anchor.BN(110000000); // 0.11 SOL
     const newContent = "second new content";
+    console.log("-----------------------------------");
+    console.log("Auction PDA:", auctionAccountPda.toBase58());
 
+    const auctionBeforeBid = await program.account.auction.fetch(auctionAccountPda);
+    console.log("Auction data before second bid:", auctionBeforeBid);
+    console.log("Highest bidder before second bid (oldBidderKey):", auctionBeforeBid.highestBidder.toBase58());
+    const oldBidderKey = auctionBeforeBid.highestBidder;
+
+    const auctionInfoBeforeBid = await program.provider.connection.getAccountInfo(auctionAccountPda);
+    if (auctionInfoBeforeBid) {
+      console.log("Auction account balance before second bid (lamports):", auctionInfoBeforeBid.lamports);
+    }
+    let data = {
+        auction: auctionAccountPda,
+        bidder: { pubkey: acounts[1].publicKey, isWritable: true, isSigner: true },
+        oldBidder: { pubkey: oldBidderKey, isWritable: true, isSigner: false },
+        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
+    }
+    console.log("DATA", data);
+    console.log(auctionAccountPda)
+    console.log(auctionAccountPda.publicKey)
     const tx = await program.methods
       .bid(bidAmount, newContent)
       .accounts({
-        auction: auctionAccount.publicKey,
-        bidder: acounts[1].publicKey,
-        oldBidder: acounts[0].publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        auction: auctionAccountPda,
+        bidder: { pubkey: acounts[1].publicKey, isWritable: true, isSigner: true },
+        oldBidder: { pubkey: oldBidderKey, isWritable: true, isSigner: false },
+        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
       })
       .signers([acounts[1]])
       .rpc();
@@ -138,8 +161,32 @@ describe("daily-auction", async() => {
     console.log("STEP 02------------------------------------");
     console.log("Your transaction signature", tx);
 
-    const auction = await program.account.auction.fetch(auctionAccount.publicKey);
+    const auction = await program.account.auction.fetch(auctionAccountPda);
     console.log("Auction data after bid:", auction);
 
+  });
+  return;
+  it("07 - End the auction", async () => {
+    const tx = await program.methods
+      .endAuction()
+      .accounts({
+        auction: auctionAccountPda.publicKey,
+        authority: { pubkey: program.provider.wallet.publicKey, isWritable: true, isSigner: true }, // authority is a signer for this transaction
+        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
+      })
+      .rpc();
+
+    console.log("");
+    console.log("");
+    console.log("STEP 03------------------------------------");
+    console.log("Your transaction signature", tx);
+
+    const auction = await program.account.auction.fetch(auctionAccountPda);
+    console.log("Auction data after end:", auction);
+
+    // Assertions to verify the auction ended correctly
+    // For example, check if is_active is false and new_content is empty
+    // expect(auction.isActive).to.be.false;
+    // expect(auction.newContent).to.equal("");
   });
 });
