@@ -121,50 +121,31 @@ describe("daily-auction", async() => {
     }
   })
 
-  it(" 06 - Allows a bid to be placed", async () => {
+// daily-auction.ts
+
+it(" 06 - Allows a bid to be placed", async () => {
     const bidAmount = new anchor.BN(110000000); // 0.11 SOL
     const newContent = "second new content";
-    console.log("-----------------------------------");
-    console.log("Auction PDA:", auctionAccountPda.toBase58());
 
     const auctionBeforeBid = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data before second bid:", auctionBeforeBid);
-    console.log("Highest bidder before second bid (oldBidderKey):", auctionBeforeBid.highestBidder.toBase58());
     const oldBidderKey = auctionBeforeBid.highestBidder;
 
-    const auctionInfoBeforeBid = await program.provider.connection.getAccountInfo(auctionAccountPda);
-    if (auctionInfoBeforeBid) {
-      console.log("Auction account balance before second bid (lamports):", auctionInfoBeforeBid.lamports);
-    }
-    let data = {
-        auction: auctionAccountPda,
-        bidder: { pubkey: acounts[1].publicKey, isWritable: true, isSigner: true },
-        oldBidder: { pubkey: oldBidderKey, isWritable: true, isSigner: false },
-        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
-    }
-    console.log("DATA", data);
-    console.log(auctionAccountPda)
-    console.log(auctionAccountPda.publicKey)
+    // Asegúrate de que las cuentas se pasen así de simple:
     const tx = await program.methods
       .bid(bidAmount, newContent)
       .accounts({
         auction: auctionAccountPda,
-        bidder: { pubkey: acounts[1].publicKey, isWritable: true, isSigner: true },
-        oldBidder: { pubkey: oldBidderKey, isWritable: true, isSigner: false },
-        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
+        bidder: acounts[1].publicKey,
+        oldBidder: oldBidderKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([acounts[1]])
       .rpc();
 
-    console.log("");
-    console.log("");
-    console.log("STEP 02------------------------------------");
-    console.log("Your transaction signature", tx);
-
+    console.log("Transacción de la segunda oferta:", tx);
     const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data after bid:", auction);
-
-  });
+    console.log("Datos de la subasta tras la segunda oferta:", auction);
+});
   return;
   it("07 - End the auction", async () => {
     const tx = await program.methods

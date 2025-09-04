@@ -3,6 +3,7 @@ use anchor_lang::solana_program::{
     program::{invoke, invoke_signed}, // <--- MODIFICADO (añadido invoke_signed para claridad)
     system_instruction,
 };
+use anchor_lang::system_program; // <--- AÑADE ESTA LÍNEA
 
 declare_id!("BxDvT9XonDvex92E6DebkHHfEQaNra6eKK3FdUcD7qQ6");
 
@@ -82,77 +83,63 @@ pub mod daily_auction {
         Ok(())
     }
 
-    pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
-        let clock = Clock::get()?;
-        let bidder = &ctx.accounts.bidder;
-        let old_bidder = &ctx.accounts.old_bidder;
-        let auction = &mut ctx.accounts.auction;
 
-        require!(new_content.len() <= 250, AuctionError::ContentTooLong);
-        require!(auction.is_active, AuctionError::AuctionNotActive);
-        // require!(
-        //     clock.unix_timestamp < auction.end_timestamp,
-        //     AuctionError::AuctionEnded
-        // );
-        require!(amount > auction.highest_bid, AuctionError::BidTooLow);
+pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
+    let auction = &mut ctx.accounts.auction;
 
-        // Si hay un postor anterior, devolverle su oferta.
-        if auction.highest_bidder != Pubkey::default() {
-            require!(
-                ctx.accounts.old_bidder.key() == auction.highest_bidder,
-                AuctionError::InvalidOldBidderAccount
-            );
+    // --- Validaciones ---
+    require!(auction.is_active, AuctionError::AuctionNotActive);
+    require!(amount > auction.highest_bid, AuctionError::BidTooLow);
+    require!(new_content.len() <= 250, AuctionError::ContentTooLong);
 
-            let amount_to_return = auction.highest_bid;
-
-            let transfer_to_old_bidder_ix = system_instruction::transfer(
-                &auction.key(),
-                &old_bidder.key(),
-                amount_to_return,
-            );
-            
-            // <--- MODIFICADO: Seeds correctas para la PDA
-            let auction_seeds = &[
-                b"auction".as_ref(),
-                &[auction.bump]
-            ];
-
-            invoke_signed(
-                &transfer_to_old_bidder_ix,
-                &[
-                    auction.to_account_info(),
-                    old_bidder.to_account_info(),
-                    ctx.accounts.system_program.to_account_info(),
-                ],
-                &[auction_seeds],
-            )?;
-        }
-
-        // Transferir la nueva oferta a la cuenta de la subasta.
-        let transfer_instruction =
-            system_instruction::transfer(bidder.to_account_info().key, &auction.key(), amount);
-        invoke(
-            &transfer_instruction,
-            &[
-                bidder.to_account_info(),
-                auction.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-
-        // Actualizar el estado de la subasta.
-        auction.highest_bid = amount;
-        auction.highest_bidder = *bidder.key;
-        auction.new_content = new_content;
-
-        msg!(
-            "Nueva oferta recibida: {} lamports de {}",
-            amount,
-            bidder.key()
+    // --- Reembolso al postor anterior (con CpiContext) ---
+    if auction.highest_bid > 0 {
+        require!(
+            ctx.accounts.old_bidder.key() == auction.highest_bidder,
+            AuctionError::InvalidOldBidderAccount
         );
-        Ok(())
+
+        let amount_to_return = auction.highest_bid;
+        
+        // Preparamos las semillas para la firma del PDA
+        let seeds = &[
+            b"auction".as_ref(),
+            &[auction.bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        // Creamos el contexto para la llamada, especificando las cuentas
+        let cpi_accounts = system_program::Transfer {
+            from: auction.to_account_info(),
+            to: ctx.accounts.old_bidder.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.system_program.to_account_info();
+        let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+
+        // Ejecutamos la transferencia usando el contexto. ¡Mucho más limpio!
+        system_program::transfer(cpi_context, amount_to_return)?;
     }
-}
+
+    // --- Depósito de la nueva oferta (con CpiContext) ---
+    // Creamos el contexto para la transferencia desde la cuenta del postor
+    let cpi_accounts_deposit = system_program::Transfer {
+        from: ctx.accounts.bidder.to_account_info(),
+        to: auction.to_account_info(),
+    };
+    let cpi_program_deposit = ctx.accounts.system_program.to_account_info();
+    let cpi_context_deposit = CpiContext::new(cpi_program_deposit, cpi_accounts_deposit);
+
+    // Ejecutamos la transferencia
+    system_program::transfer(cpi_context_deposit, amount)?;
+
+    // --- Actualización final del estado ---
+    auction.highest_bid = amount;
+    auction.highest_bidder = ctx.accounts.bidder.key();
+    auction.new_content = new_content;
+
+    msg!("Oferta recibida correctamente: {} de {}", amount, ctx.accounts.bidder.key());
+    Ok(())
+}}
 
 #[account]
 pub struct Auction {
