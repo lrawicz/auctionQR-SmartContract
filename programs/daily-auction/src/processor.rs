@@ -41,6 +41,7 @@ pub fn end_auction(ctx: Context<EndAuction>) -> Result<()> {
     let auction = &mut ctx.accounts.auction;
 
     require!(auction.is_active, AuctionError::AuctionNotActive);
+    // require!(auction.end_timestamp < Clock::get()?.unix_timestamp, AuctionError::AuctionNotOver); 
 
     if auction.highest_bid > 0 {
         let amount_to_pay = auction.highest_bid;
@@ -64,6 +65,7 @@ pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
     require!(auction.is_active, AuctionError::AuctionNotActive);
     require!(amount > auction.highest_bid, AuctionError::BidTooLow);
     require!(new_content.len() <= 250, AuctionError::ContentTooLong);
+    require!(auction.end_timestamp > Clock::get()?.unix_timestamp, AuctionError::AuctionEnded);
 
     let previous_bid = auction.highest_bid;
 
