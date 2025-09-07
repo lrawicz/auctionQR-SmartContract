@@ -4,6 +4,7 @@ pub mod contexts;
 pub mod error;
 pub mod processor;
 pub mod state;
+pub mod event;
 
 use contexts::*;
 

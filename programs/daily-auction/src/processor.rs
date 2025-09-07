@@ -1,11 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{self, program::invoke_signed, system_instruction};
 use anchor_lang::system_program;
 
-use crate::{
-    contexts::{Bid, EndAuction, Initialize, StartAuction},
-    error::AuctionError,
-};
+use crate::{contexts::{Bid, EndAuction, Initialize, StartAuction}, error::AuctionError, event::BidPlaced};
 
 pub fn initialize(ctx: Context<Initialize>, initial_content: String) -> Result<()> {
     let auction = &mut ctx.accounts.auction;
@@ -96,5 +92,11 @@ pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
     auction.new_content = new_content;
 
     msg!("Oferta recibida correctamente: {} de {}", amount, ctx.accounts.bidder.key());
+    emit!(BidPlaced {
+        bidder: ctx.accounts.bidder.key(),
+        old_bidder: ctx.accounts.old_bidder.key(),
+        amount,
+        new_content: auction.new_content.clone(),
+    });
     Ok(())
 }
