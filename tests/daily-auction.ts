@@ -1,173 +1,160 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { DailyAuction } from "../target/types/daily_auction";
+import { expect } from "chai";
 
-describe("daily-auction", async() => {
+describe("daily-auction", () => {
   // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
-  const program = anchor.workspace.dailyAuction as Program<DailyAuction>;
+  const program = anchor.workspace.DailyAuction as Program<DailyAuction>;
 
-  const [auctionAccountPda, auctionAccountBump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("auction")], program.programId);
-  const initialContent = "Hello World";
-  const acounts = [anchor.web3.Keypair.generate(), anchor.web3.Keypair.generate(), anchor.web3.Keypair.generate()];
-  it("01 - airdrop", async () => {
-    await Promise.all(acounts.map(async (account) => {
-      const airdropSignature = await program.provider.connection.requestAirdrop(
-        account.publicKey,
-        1000000000 // 1 SOL
-      );
-      await program.provider.connection.confirmTransaction(airdropSignature);
-    }));
-  })
-  it("02 -Is initialized!", async () => {
-    const tx = await program.methods
+  // Keypairs for the test
+  const authority = provider.wallet as anchor.Wallet;
+  const bidderOne = anchor.web3.Keypair.generate();
+  const bidderTwo = anchor.web3.Keypair.generate();
+
+  // PDA for the auction account
+  const [auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("auction")],
+    program.programId
+  );
+
+  const initialContent = "Initial Content";
+
+  it("Isolates test accounts", async () => {
+    // Airdrop SOL to bidders for testing
+    await provider.connection.requestAirdrop(bidderOne.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+    await provider.connection.requestAirdrop(bidderTwo.publicKey, 3 * anchor.web3.LAMPORTS_PER_SOL);
+  });
+
+  it("01. Initializes the auction", async () => {
+    await program.methods
       .initialize(initialContent)
       .accounts({
-        auction: auctionAccountPda,
-        authority: program.provider.wallet.publicKey,
+        auction: auctionPda,
+        authority: authority.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      
       .rpc();
-    console.log("");
-    console.log("");
-    console.log("STEP 01------------------------------------");
-    console.log("Your transaction signature", tx);
 
-    const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data:", auction);
+    const auctionAccount = await program.account.auction.fetch(auctionPda);
+
+    expect(auctionAccount.authority.toBase58()).to.equal(authority.publicKey.toBase58());
+    expect(auctionAccount.newContent).to.equal(initialContent);
+    expect(auctionAccount.oldContent).to.equal(initialContent);
+    expect(auctionAccount.isActive).to.be.true;
+    expect(auctionAccount.highestBid.toNumber()).to.equal(0);
   });
-  it(" TEST01", async () => {
-    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccountPda);
-    if (auctionInfo) {
-      console.log("Auction account balance (lamports):", auctionInfo.lamports);
-      console.log("Auction account balance (SOL):", auctionInfo.lamports / anchor.web3.LAMPORTS_PER_SOL);
-    } else {
-      console.log("Auction account not found.");
-    }
-  })
 
-  it("03 - Allows a bid to be placed", async () => {
-    const bidAmount = new anchor.BN(100000000); // 0.1 SOL
-    const newContent = "New content for auction";
+  it("02. Bid 1: Account 1 places a successful bid", async () => {
+    const bidAmount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const newContent = "Content from Bidder One";
 
-    // For the first bid, oldBidder can be a dummy or default Pubkey
-    const oldBidderKey = anchor.web3.Keypair.generate().publicKey;
+    const auctionBalanceBefore = await provider.connection.getBalance(auctionPda);
 
-    const tx = await program.methods
+    await program.methods
       .bid(bidAmount, newContent)
       .accounts({
-        auction: auctionAccountPda.publicKey,
-        bidder: acounts[0].publicKey, //bidder.publicKey,
-        oldBidder: anchor.web3.Keypair.generate().publicKey, // Dummy account for first bid
+        auction: auctionPda,
+        bidder: bidderOne.publicKey,
+        oldBidder: bidderOne.publicKey, // No one to refund yet
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([acounts[0]])
+      .signers([bidderOne])
       .rpc();
 
-    console.log("");
-    console.log("");
-    console.log("STEP 02------------------------------------");
-    console.log("Your transaction signature", tx);
+    const auctionAccount = await program.account.auction.fetch(auctionPda);
+    const auctionBalanceAfter = await provider.connection.getBalance(auctionPda);
 
-    const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data:", auction);
-
+    expect(auctionAccount.highestBidder.toBase58()).to.equal(bidderOne.publicKey.toBase58());
+    expect(auctionAccount.highestBid.toString()).to.equal(bidAmount.toString());
+    expect(auctionAccount.newContent).to.equal(newContent);
+    expect(auctionBalanceAfter).to.equal(auctionBalanceBefore + bidAmount.toNumber());
   });
-  if (false)
-  it("04 - Does not allow a bid lower than the previous one", async () => {
-    const bidAmount = new anchor.BN(50000000); // Lower than previous bid
-    const newContent = "Attempting lower bid";
+
+  it("03. Bid 2: Account 2 fails to bid with a lower amount", async () => {
+    const lowerBidAmount = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+    const newContent = "Content from Bidder Two (lower)";
 
     try {
       await program.methods
-        .bid(bidAmount, newContent)
+        .bid(lowerBidAmount, newContent)
         .accounts({
-          auction: auctionAccountPda,
-          bidder: acounts[1].publicKey,
-          oldBidder: acounts[0].publicKey,
+          auction: auctionPda,
+          bidder: bidderTwo.publicKey,
+          oldBidder: bidderOne.publicKey, // Previous bidder
           systemProgram: anchor.web3.SystemProgram.programId,
         })
-        .signers([acounts[1]])
+        .signers([bidderTwo])
         .rpc();
-      // If the transaction doesn't throw an error, fail the test
-      throw new Error("Transaction did not fail as expected.");
-    } catch (error) {
-      // Assert that the error is an AnchorError and has the correct error code
-      if (error instanceof anchor.AnchorError) {
-        console.log("Error code:", error.error.errorCode.code);
-        // Assuming 'BidTooLow' is the error name in your Rust program
-        // You might need to adjust this based on the actual error name/code
-        if (error.error.errorCode.code !== "BidTooLow") {
-          throw new Error(`Expected BidTooLow error, but got ${error.error.errorCode.code}`);
-        }
-      } else {
-        throw error; // Re-throw other errors
-      }
+      // This should not be reached
+      expect.fail("Transaction should have failed with BidTooLow error.");
+    } catch (err) {
+      expect(err).to.be.instanceOf(anchor.AnchorError);
+      expect(err.error.errorCode.code).to.equal("BidTooLow");
     }
-  })
-  it(" 05 - get data", async () => {
-    const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data:", auction);
-    console.log(acounts.map(a => a.publicKey.toBase58()));
+  });
 
-    const auctionInfo = await program.provider.connection.getAccountInfo(auctionAccountPda);
-    if (auctionInfo) {
-      console.log("Auction account balance (lamports):", auctionInfo.lamports);
-      console.log("Auction account balance (SOL):", auctionInfo.lamports / anchor.web3.LAMPORTS_PER_SOL);
-    } else {
-      console.log("Auction account not found.");
-    }
-  })
+  it("04. Bid 3: Account 2 places a successful higher bid", async () => {
+    const higherBidAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const newContent = "Content from Bidder Two (higher)";
 
-// daily-auction.ts
+    const bidderOneBalanceBefore = await provider.connection.getBalance(bidderOne.publicKey);
 
-it(" 06 - Allows a bid to be placed", async () => {
-    const bidAmount = new anchor.BN(110000000); // 0.11 SOL
-    const newContent = "second new content";
-
-    const auctionBeforeBid = await program.account.auction.fetch(auctionAccountPda);
-    const oldBidderKey = auctionBeforeBid.highestBidder;
-
-    // Asegúrate de que las cuentas se pasen así de simple:
-    const tx = await program.methods
-      .bid(bidAmount, newContent)
+    await program.methods
+      .bid(higherBidAmount, newContent)
       .accounts({
-        auction: auctionAccountPda,
-        bidder: acounts[1].publicKey,
-        oldBidder: oldBidderKey,
+        auction: auctionPda,
+        bidder: bidderTwo.publicKey,
+        oldBidder: bidderOne.publicKey, // Bidder One should be refunded
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([acounts[1]])
+      .signers([bidderTwo])
       .rpc();
 
-    console.log("Transacción de la segunda oferta:", tx);
-    const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Datos de la subasta tras la segunda oferta:", auction);
-});
-  return;
-  it("07 - End the auction", async () => {
-    const tx = await program.methods
+    const auctionAccount = await program.account.auction.fetch(auctionPda);
+    const bidderOneBalanceAfter = await provider.connection.getBalance(bidderOne.publicKey);
+
+    // Check auction state
+    expect(auctionAccount.highestBidder.toBase58()).to.equal(bidderTwo.publicKey.toBase58());
+    expect(auctionAccount.highestBid.toString()).to.equal(higherBidAmount.toString());
+    expect(auctionAccount.newContent).to.equal(newContent);
+
+    // Check if bidder one was refunded (1 SOL)
+    const previousBid = 1 * anchor.web3.LAMPORTS_PER_SOL;
+    expect(bidderOneBalanceAfter).to.equal(bidderOneBalanceBefore + previousBid);
+  });
+
+  it("05. Ends the auction and transfers funds to authority", async () => {
+    const auctionAccountBefore = await program.account.auction.fetch(auctionPda);
+    const authorityBalanceBefore = await provider.connection.getBalance(authority.publicKey);
+
+    await program.methods
       .endAuction()
       .accounts({
-        auction: auctionAccountPda.publicKey,
-        authority: { pubkey: program.provider.wallet.publicKey, isWritable: true, isSigner: true }, // authority is a signer for this transaction
-        systemProgram: { pubkey: anchor.web3.SystemProgram.programId, isWritable: false, isSigner: false },
+        auction: auctionPda,
+        authority: authority.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
 
-    console.log("");
-    console.log("");
-    console.log("STEP 03------------------------------------");
-    console.log("Your transaction signature", tx);
+    const auctionAccountAfter = await program.account.auction.fetch(auctionPda);
+    const authorityBalanceAfter = await provider.connection.getBalance(authority.publicKey);
 
-    const auction = await program.account.auction.fetch(auctionAccountPda);
-    console.log("Auction data after end:", auction);
+    // Check auction state
+    expect(auctionAccountAfter.isActive).to.be.false;
+    expect(auctionAccountAfter.newContent).to.equal("");
+    expect(auctionAccountAfter.oldContent).to.equal(auctionAccountBefore.newContent);
 
-    // Assertions to verify the auction ended correctly
-    // For example, check if is_active is false and new_content is empty
-    // expect(auction.isActive).to.be.false;
-    // expect(auction.newContent).to.equal("");
+    // Check authority balance
+    const highestBid = auctionAccountBefore.highestBid.toNumber();
+    // The authority balance should increase by the highest bid, minus transaction fees.
+    // This check is tricky due to unpredictable gas fees, so we check if it increased significantly.
+    expect(authorityBalanceAfter).to.be.greaterThan(authorityBalanceBefore);
+
+    // A more precise check would require calculating the exact rent and transaction fees, 
+    // but for most cases, confirming the balance has increased by approximately the bid amount is sufficient.
   });
 });

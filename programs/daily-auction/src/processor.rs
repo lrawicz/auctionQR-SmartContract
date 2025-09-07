@@ -44,23 +44,10 @@ pub fn end_auction(ctx: Context<EndAuction>) -> Result<()> {
 
     if auction.highest_bid > 0 {
         let amount_to_pay = auction.highest_bid;
-        let seeds = &[b"auction".as_ref(), &[auction.bump]];
 
-        let transfer_to_authority_ix = system_instruction::transfer(
-            &auction.key(),
-            &ctx.accounts.authority.key(),
-            amount_to_pay,
-        );
-
-        invoke_signed(
-            &transfer_to_authority_ix,
-            &[
-                auction.to_account_info(),
-                ctx.accounts.authority.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-            &[&seeds[..]],
-        )?;
+        // Natively transfer lamports from the PDA to the authority
+        **auction.to_account_info().try_borrow_mut_lamports()? -= amount_to_pay;
+        **ctx.accounts.authority.to_account_info().try_borrow_mut_lamports()? += amount_to_pay;
     }
 
     auction.is_active = false;
@@ -73,48 +60,39 @@ pub fn end_auction(ctx: Context<EndAuction>) -> Result<()> {
 pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
     let auction = &mut ctx.accounts.auction;
 
+    // --- Validations ---
     require!(auction.is_active, AuctionError::AuctionNotActive);
     require!(amount > auction.highest_bid, AuctionError::BidTooLow);
     require!(new_content.len() <= 250, AuctionError::ContentTooLong);
 
-    if auction.highest_bid > 0 {
-        require!(
-            ctx.accounts.old_bidder.key() == auction.highest_bidder,
-            AuctionError::InvalidOldBidderAccount
-        );
+    let previous_bid = auction.highest_bid;
 
-        let amount_to_return = auction.highest_bid;
-
-        let seeds = &[b"auction".as_ref(), &[auction.bump]];
-        let signer_seeds = &[&seeds[..]];
-
-        let cpi_accounts = system_program::Transfer {
-            from: auction.to_account_info(),
-            to: ctx.accounts.old_bidder.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.system_program.to_account_info();
-        let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
-
-        system_program::transfer(cpi_context, amount_to_return)?;
-    }
-
+    // --- Deposit the new bid (CPI from bidder to PDA) ---
     let cpi_accounts_deposit = system_program::Transfer {
         from: ctx.accounts.bidder.to_account_info(),
         to: auction.to_account_info(),
     };
     let cpi_program_deposit = ctx.accounts.system_program.to_account_info();
     let cpi_context_deposit = CpiContext::new(cpi_program_deposit, cpi_accounts_deposit);
-
     system_program::transfer(cpi_context_deposit, amount)?;
 
+    // --- Refund previous bidder (if any) ---
+    if previous_bid > 0 {
+        require!(
+            ctx.accounts.old_bidder.key() == auction.highest_bidder,
+            AuctionError::InvalidOldBidderAccount
+        );
+        
+        // Natively transfer lamports from the PDA
+        **auction.to_account_info().try_borrow_mut_lamports()? -= previous_bid;
+        **ctx.accounts.old_bidder.to_account_info().try_borrow_mut_lamports()? += previous_bid;
+    }
+
+    // --- Update auction state ---
     auction.highest_bid = amount;
     auction.highest_bidder = ctx.accounts.bidder.key();
     auction.new_content = new_content;
 
-    msg!(
-        "Oferta recibida correctamente: {} de {}",
-        amount,
-        ctx.accounts.bidder.key()
-    );
+    msg!("Oferta recibida correctamente: {} de {}", amount, ctx.accounts.bidder.key());
     Ok(())
 }

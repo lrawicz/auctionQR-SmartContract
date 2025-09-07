@@ -52,6 +52,7 @@ pub struct Bid<'info> {
     pub auction: Account<'info, Auction>,
     #[account(mut)]
     pub bidder: Signer<'info>,
+    /// CHECK: This is the account of the previous highest bidder. We perform a manual check inside the instruction to ensure it matches the `highest_bidder` stored in the auction account.
     #[account(mut)]
     pub old_bidder: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
