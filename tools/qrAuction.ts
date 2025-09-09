@@ -1,26 +1,47 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { DailyAuction } from "../target/types/daily_auction";
+import * as fs from 'fs';
+import * as os from 'os';
+import { networks } from "./interfaces";
 
 export class QrAuction{
     program:Program<DailyAuction>;
     provider: anchor.Provider;
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
-    
-    constructor(){
-        // Configure the client to use the local cluster.
-        this.provider = anchor.getProvider()
-        //anchor.AnchorProvider.env();
+    programId:anchor.web3.PublicKey;
+    constructor(network:networks="localnet",programId:string|undefined=undefined){
+      if(network=="localnet"){
+        this.provider = anchor.AnchorProvider.env()
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
-        
-        // Keypairs for the test
-        this.authority = this.provider.wallet as anchor.Wallet;
-        [this.auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("auction")],
-            this.program.programId
+        this.provider = anchor.getProvider()
+      }else{
+        const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(network), 'confirmed');
+        const home = os.homedir();
+        const walletPath = `${home}/.config/solana/id.json`;
+        const keypair = anchor.web3.Keypair.fromSecretKey(
+          new Uint8Array(JSON.parse(fs.readFileSync(walletPath).toString()))
         );
+        const wallet = new anchor.Wallet(keypair);
+        this.provider = new anchor.AnchorProvider(
+            connection,
+            wallet,
+            anchor.AnchorProvider.defaultOptions()
+        );
+      }
+      anchor.setProvider(this.provider);
+
+      this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
+      
+      this.programId = programId? new anchor.web3.PublicKey(programId):this.program.programId;
+      // Keypairs for the test
+      this.authority = this.provider.wallet as anchor.Wallet;
+      [this.auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
+          [Buffer.from("auction")],
+          this.programId
+      );
 
     }
     async initialize(params:{initialContent:string}){

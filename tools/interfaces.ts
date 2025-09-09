@@ -1,0 +1,1 @@
+export type networks = "localnet"|"mainnet-beta"|"devnet";
