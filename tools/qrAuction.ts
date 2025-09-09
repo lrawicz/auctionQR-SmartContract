@@ -7,17 +7,16 @@ export class QrAuction{
     provider: anchor.Provider;
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
-
+    
     constructor(){
         // Configure the client to use the local cluster.
         this.provider = anchor.AnchorProvider.env();
+        //anchor.AnchorProvider.env();
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
         
         // Keypairs for the test
         this.authority = this.provider.wallet as anchor.Wallet;
-        
-        // PDA for the auction account
         [this.auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("auction")],
             this.program.programId
@@ -28,9 +27,7 @@ export class QrAuction{
         await this.program.methods
           .initialize(params.initialContent)
           .accounts({
-            auction: this.auctionPda,
-            authority: this.authority.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
+            //authority: this.authority.publicKey,
           })
           .rpc();
     }
@@ -41,19 +38,13 @@ export class QrAuction{
         bidAmount:number,
         newContent:string
     }) {
-        // const bidAmount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-        // const newContent = "Content from Bidder One";
       try{
         await this.program.methods
         .bid(new anchor.BN(params.bidAmount * anchor.web3.LAMPORTS_PER_SOL), params.newContent)
         .accounts({
-            auction: this.auctionPda,
-            bidder: params.bidder.publicKey,
-            oldBidder: params.oldBidderPublicKey?
-              params.oldBidderPublicKey:
-              params.bidder.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
+          oldBidder: params.oldBidderPublicKey? params.oldBidderPublicKey: params.bidder.publicKey,
+          bidder: params.bidder.publicKey,
+        })
           .signers([params.bidder])
           .rpc();
         }catch(error){
@@ -66,9 +57,9 @@ export class QrAuction{
         await this.program.methods
         .startAuction()
         .accounts({
-            auction: this.auctionPda,
-            authority: this.authority.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
+            // auction: this.auctionPda,
+            // authority: this.authority.publicKey,
+            // systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
        
@@ -77,9 +68,9 @@ export class QrAuction{
         await this.program.methods
         .endAuction()
         .accounts({
-            auction: this.auctionPda,
-            authority: this.authority.publicKey,
-            systemProgram: anchor.web3.SystemProgram.programId,
+            // auction: this.auctionPda,
+            // authority: this.authority.publicKey,
+            // systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
 
