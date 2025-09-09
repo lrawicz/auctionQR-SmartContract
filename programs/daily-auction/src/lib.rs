@@ -8,7 +8,7 @@ pub mod event;
 
 use contexts::*;
 
-declare_id!("BxDvT9XonDvex92E6DebkHHfEQaNra6eKK3FdUcD7qQ6");
+declare_id!("DhyPPq6F3JNGjMHdxP6rhkfW2mH2PtiGbM8HhUyA88Hy");
 
 #[program]
 pub mod daily_auction {

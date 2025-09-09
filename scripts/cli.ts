@@ -12,7 +12,7 @@ inquirer
     {
       type: 'input',
       name: 'programId',
-      message: 'Enter the programId (optional)',
+      message: 'Enter the programId',
     },
     {
       type: 'list',

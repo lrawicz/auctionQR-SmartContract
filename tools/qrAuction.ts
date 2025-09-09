@@ -7,7 +7,7 @@ import { networks } from "./interfaces";
 
 export class QrAuction{
     program:Program<DailyAuction>;
-    provider: anchor.Provider;
+    provider:anchor.Provider;
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
     programId:anchor.web3.PublicKey;
@@ -106,7 +106,12 @@ export class QrAuction{
       isActive: boolean;
       bump: number;
     }>{
-      return await this.program.account.auction.fetch(this.auctionPda);
+      try{
+
+        return await this.program.account.auction.fetch(this.auctionPda);
+      }catch(error){
+        throw error;
+      }
     }
     async getBalance():Promise<number>{
       return await this.provider.connection.getBalance(
