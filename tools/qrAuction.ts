@@ -10,7 +10,7 @@ export class QrAuction{
     
     constructor(){
         // Configure the client to use the local cluster.
-        this.provider = anchor.AnchorProvider.env();
+        this.provider = anchor.getProvider()
         //anchor.AnchorProvider.env();
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
