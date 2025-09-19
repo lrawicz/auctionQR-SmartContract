@@ -3,10 +3,6 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "contract_init": "ts-node scripts/initialize.ts",
-    "contract_getData": "ts-node scripts/getData.ts",
-    "contract_start": "ts-node scripts/start.ts",
-    "contract_end": "ts-node scripts/end.ts",
     "cli": "ts-node scripts/cli.ts"
   },
   "dependencies": {

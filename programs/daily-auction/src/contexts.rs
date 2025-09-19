@@ -52,8 +52,36 @@ pub struct Bid<'info> {
     pub auction: Account<'info, Auction>,
     #[account(mut)]
     pub bidder: Signer<'info>,
-    /// CHECK: This is the account of the previous highest bidder. We perform a manual check inside the instruction to ensure it matches the `highest_bidder` stored in the auction account.
+    /// CHECK: This is the account of the previous highest bidder.
+    //  We perform a manual check inside the instruction to ensure
+    //  it matches the `highest_bidder` stored in the auction account.
     #[account(mut)]
     pub old_bidder: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetAuthority<'info> {
+    #[account(
+        mut,
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump,
+        has_one = authority,
+    )]
+    pub auction: Account<'info, Auction>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct EndAndStartAuction<'info> {
+    #[account(
+        mut,
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump,
+        has_one = authority
+    )]
+    pub auction: Account<'info, Auction>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }

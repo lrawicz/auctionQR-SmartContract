@@ -7,3 +7,10 @@ pub struct BidPlaced {
     pub amount: u64,
     pub new_content: String,
 }
+
+#[event]
+pub struct AuctionEnded {
+    pub winner: Pubkey,
+    pub amount: u64,
+    pub content: String,
+}

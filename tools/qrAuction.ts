@@ -11,13 +11,15 @@ export class QrAuction{
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
     programId:anchor.web3.PublicKey;
-    constructor(network:networks="localnet",programId:string|undefined=undefined){
+    constructor(network:networks="localnet",idl:any|undefined=undefined){
+//      const  dynamicDalyAuction = anchor.workspace.DailyAuction as Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>;
+      
       if(network=="localnet"){
         this.provider = anchor.AnchorProvider.env()
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
-        this.provider = anchor.getProvider()
       }else{
+        try{
         const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(network), 'confirmed');
         const home = os.homedir();
         const walletPath = `${home}/.config/solana/id.json`;
@@ -30,19 +32,30 @@ export class QrAuction{
             wallet,
             anchor.AnchorProvider.defaultOptions()
         );
+        // this.provider = anchor.AnchorProvider.env()
+        this.program = new Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>( 
+          // this.program = new Program <DailyAuction>(
+            idl as DailyAuction, 
+            this.provider,
+          );
+        }catch(error){
+          console.log(error)
+        } 
+
       }
       anchor.setProvider(this.provider);
-
-      this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
       
-      this.programId = programId? new anchor.web3.PublicKey(programId):this.program.programId;
+      // this.programId = idl? new anchor.web3.PublicKey(idl.address):this.program.programId;
       // Keypairs for the test
       this.authority = this.provider.wallet as anchor.Wallet;
-      [this.auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      try{
+        [this.auctionPda] = anchor.web3.PublicKey.findProgramAddressSync(
           [Buffer.from("auction")],
-          this.programId
-      );
-
+          this.program.programId
+        );
+      }catch(error){
+        console.log(error)
+      }
     }
     async initialize(params:{initialContent:string}){
         await this.program.methods
@@ -74,13 +87,12 @@ export class QrAuction{
   
 
     };
-    async start_auction(){
+    async start_auction(new_content:string = ""){
         await this.program.methods
-        .startAuction()
+        .startAuction(new_content)
         .accounts({
-            // auction: this.auctionPda,
-            // authority: this.authority.publicKey,
-            // systemProgram: anchor.web3.SystemProgram.programId,
+            auction: this.auctionPda,
+            authority: this.authority.publicKey,
         })
         .rpc();
        
@@ -89,9 +101,9 @@ export class QrAuction{
         await this.program.methods
         .endAuction()
         .accounts({
-            // auction: this.auctionPda,
-            // authority: this.authority.publicKey,
-            // systemProgram: anchor.web3.SystemProgram.programId,
+            auction: this.auctionPda,
+            authority: this.authority.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
 
@@ -107,8 +119,9 @@ export class QrAuction{
       bump: number;
     }>{
       try{
-
-        return await this.program.account.auction.fetch(this.auctionPda);
+        return await this.program.account.auction.fetch(this.auctionPda).catch(error => {
+          throw error;
+        });
       }catch(error){
         throw error;
       }
@@ -117,5 +130,38 @@ export class QrAuction{
       return await this.provider.connection.getBalance(
           this.auctionPda
         );
+    }
+
+    async setAuthority(newAuthority:string){
+        await this.program.methods
+        .setAuthority(new anchor.web3.PublicKey(newAuthority))
+        .accounts({
+            auction: this.auctionPda,
+            authority: this.authority.publicKey,
+        })
+        .rpc();
+    }
+
+    public setWalletAuthority(newAuthorityWallet: anchor.Wallet) {
+        this.authority = newAuthorityWallet;
+        const newProvider = new anchor.AnchorProvider(
+            this.provider.connection,
+            newAuthorityWallet,
+            anchor.AnchorProvider.defaultOptions()
+        );
+        anchor.setProvider(newProvider);
+        this.provider = newProvider;
+        this.program = new Program<DailyAuction>(this.program.idl, newProvider);
+    }
+
+    async endAndStartAuction(newContent: string) {
+        await this.program.methods
+            .endAndStartAuction(newContent)
+            .accounts({
+                auction: this.auctionPda,
+                authority: this.authority.publicKey,
+                systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .rpc();
     }
 }

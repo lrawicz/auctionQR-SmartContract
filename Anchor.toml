@@ -1,19 +1,19 @@
 [toolchain]
-package_manager = "yarn"
 anchor_version = "0.31.1"
+package_manager = "yarn"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.localnet]
-daily_auction = "DhyPPq6F3JNGjMHdxP6rhkfW2mH2PtiGbM8HhUyA88Hy"
+daily_auction = "7o6VPgbp3FwH368f6vrbHVgKyuDBfdxFhTpqqAc5cwGR"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

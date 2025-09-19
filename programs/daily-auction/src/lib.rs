@@ -8,7 +8,7 @@ pub mod event;
 
 use contexts::*;
 
-declare_id!("DhyPPq6F3JNGjMHdxP6rhkfW2mH2PtiGbM8HhUyA88Hy");
+declare_id!("7o6VPgbp3FwH368f6vrbHVgKyuDBfdxFhTpqqAc5cwGR");
 
 #[program]
 pub mod daily_auction {
@@ -18,8 +18,8 @@ pub mod daily_auction {
         processor::initialize(ctx, initial_content)
     }
 
-    pub fn start_auction(ctx: Context<StartAuction>) -> Result<()> {
-        processor::start_auction(ctx)
+    pub fn start_auction(ctx: Context<StartAuction>,new_content:String) -> Result<()> {
+        processor::start_auction(ctx,new_content)
     }
 
     pub fn end_auction(ctx: Context<EndAuction>) -> Result<()> {
@@ -28,5 +28,13 @@ pub mod daily_auction {
 
     pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
         processor::bid(ctx, amount, new_content)
+    }
+
+    pub fn set_authority(ctx: Context<SetAuthority>, new_authority: Pubkey) -> Result<()> {
+        processor::set_authority(ctx, new_authority)
+    }
+
+    pub fn end_and_start_auction(ctx: Context<EndAndStartAuction>, new_content: String) -> Result<()> {
+        processor::end_and_start_auction(ctx, new_content)
     }
 }
