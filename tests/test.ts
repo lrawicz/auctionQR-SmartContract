@@ -292,4 +292,28 @@ describe("daily-auction", () => {
 
     if (logging) showLog("10");
   });
+
+    it("11. Bid 1 (Round 3): Account 1 places a successful bid", async () => {
+    const bidAmount:number = 0.5 //in SOL
+    const newContent:string = "Content from Bidder One (Round 3)"
+    const auctionBalanceBefore = await smartContract.getBalance()
+
+    await smartContract.bid({
+        bidder:bidderOne,
+        bidAmount,
+        newContent
+      })
+
+    const auctionAccount = await smartContract.getData()
+    const auctionBalanceAfter = await smartContract.getBalance()
+
+    const bidAmountInLamports = bidAmount * anchor.web3.LAMPORTS_PER_SOL;
+
+    expect(auctionAccount.highestBidder.toBase58()).to.equal(bidderOne.publicKey.toBase58());
+    expect(auctionAccount.highestBid.toString()).to.equal(bidAmountInLamports.toString());
+    expect(auctionAccount.newContent).to.equal(newContent);
+    expect(auctionBalanceAfter).to.equal(auctionBalanceBefore + (bidAmountInLamports));
+    if (logging) showLog("11")
+
+  });
 });
