@@ -10,7 +10,7 @@ anchor.setProvider(provider);
 const smartContract = anchor.workspace.DailyAuction as Program<DailyAuction>;
 
 // Añadir el listener para "MiEvento"
-const listener = smartContract.addEventListener("auction", (event, slot) => {
+const listener = smartContract.addEventListener("bidPlaced", (event, slot) => {
     console.log("¡Evento recibido!");
     console.log("Slot:", slot);
     console.log("Datos del evento:", event);
