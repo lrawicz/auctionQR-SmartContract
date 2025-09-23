@@ -1,4 +1,25 @@
-Program Id: DhyPPq6F3JNGjMHdxP6rhkfW2mH2PtiGbM8HhUyA88Hy
+without date limit:
 
-Signature: 3VPAmACqyPXUa6Ui1kNVpCidi1wJGvdT1JTe8ocqwKAnkJz9MtyrBy34Vf96FMjKZD8NziiHxTpPLHvyJ4sgVTqr
-DhyPPq6F3JNGjMHdxP6rhkfW2mH2PtiGbM8HhUyA88Hy
+Deploying cluster: https://api.devnet.solana.com
+Upgrade authority: /home/lrawicz/.config/solana/id.json
+Deploying program "daily_auction"...
+Program path: /home/lrawicz/develop/code/upwork/smartContract/target/deploy/daily_auction.so...
+Program Id: 9aRRQcj9tqhwpJB5bhz3cKvgVoAMGHwVTo8gS44JRAiG
+
+Signature: F5rTgPoyjeBcJtXY8XepzDyTK9DiGotL9vVCe2cDKcPtj1nuMSBQ3PWd4m3B6kr1P62pB9sRxKsQ1B5PB73HCjK
+
+Deploy success
+
+---------------
+
+with date limit:
+
+Deploying cluster: https://api.devnet.solana.com
+Upgrade authority: /home/lrawicz/.config/solana/id.json
+Deploying program "daily_auction"...
+Program path: /home/lrawicz/develop/code/upwork/smartContract/target/deploy/daily_auction.so...
+Program Id: D7DRmV7x6oCXWtRC9zevAGJf1pkFhWtywyWytbzAYsfz
+
+Signature: wqP2vgFgirTbMNFnatDaouWvHKrUmLhsAsbQVrdvtgh39JcsLxqD5gcGBnwTejF4K6sYZ9huq9a4SDFqNcV1qo3
+
+Deploy success

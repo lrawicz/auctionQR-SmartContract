@@ -2,8 +2,8 @@ import inquirer from 'inquirer';
 import { QrAuction } from '../tools/qrAuction';
 import fs from 'fs';
 async function  main(){
-
   const idlsData = await fs.readdirSync('./idls')
+                      .filter(file => file.endsWith('.json'))
                       .reduce((acc, file) => {
                         acc[file] = JSON.parse(fs.readFileSync(`./idls/${file}`, 'utf8'));
                         return acc;
