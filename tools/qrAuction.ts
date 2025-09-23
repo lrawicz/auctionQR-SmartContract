@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { DailyAuction } from "../target/types/daily_auction";
+//import { DailyAuction } from "../target/types/daily_auction";
+import { DailyAuction } from "../idls/types";
 import * as fs from 'fs';
 import * as os from 'os';
 import { networks } from "./interfaces";
