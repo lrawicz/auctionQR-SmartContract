@@ -6,8 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { networks } from "./interfaces";
 import { Client } from 'pg';
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 export class QrAuction{
     program:Program<DailyAuctionDevnet>;
