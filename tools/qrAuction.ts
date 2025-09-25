@@ -213,7 +213,12 @@ export class QrAuction{
         const month = (yesterday.getMonth() + 1).toString().padStart(2, '0');
         const day = yesterday.getDate().toString().padStart(2, '0');
         const room = `bidroom_${year}-${month}-${day}`;
-
+        console.log(
+          {user: process.env.PG_USER,
+          host: process.env.PG_HOST,
+          database: process.env.PG_DATABASE,
+          password: process.env.PG_PASSWORD}
+        )
         const contractData =await this.getData()
         const client = new Client({
           user: process.env.PG_USER,
