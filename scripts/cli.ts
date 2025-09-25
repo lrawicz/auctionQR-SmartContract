@@ -27,7 +27,7 @@ async function  main(){
         type: 'list',
         name: 'command',
         message: 'Select the command',
-        choices: ['init', 'start', 'end','getData', 'set-authority', 'reset'],
+        choices: ['init', 'start', 'end','getData', 'set-authority', 'reset','set-auction-number'],
       },
     ])
     .then(async (answers) => {
@@ -54,7 +54,9 @@ async function  main(){
           break;
           case "end":
               await smartContract.end_auction()
-              .then(() => console.log("contract ended"))
+              .then(async () => {
+                console.log("contract ended");
+              })
               .catch(err => console.error(err));
           break;
           case "getData":
@@ -66,6 +68,12 @@ async function  main(){
             await smartContract.setAuthority(userInput_01.newAuthority)
             .then(() => console.log("Authority updated"))
             .catch(err => console.error(err));
+          break;
+          case "set-auction-number":
+            const userInput_setAuctionNumber = await inquirer.prompt([{type:"input", name:"newAuctionNumber", message:"new auction index number"}])
+            await smartContract.setAuctionNumber(userInput_setAuctionNumber.newAuctionNumber)
+              .then(() => console.log(`auction number set to ${userInput_setAuctionNumber.newAuctionNumber}`))
+              .catch(err => console.error(err));
           break;
           case "reset":
             let userInput_02 = await inquirer.prompt([{type:"input", name:"newContent", message:"new content"}])

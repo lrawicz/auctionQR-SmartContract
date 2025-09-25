@@ -216,6 +216,59 @@
       ]
     },
     {
+      "name": "set_auction_number",
+      "discriminator": [
+        28,
+        133,
+        185,
+        121,
+        127,
+        157,
+        75,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auction_number",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "set_authority",
       "discriminator": [
         133,
@@ -434,6 +487,14 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "old_highest_bid",
+            "type": "u64"
+          },
+          {
+            "name": "auction_number",
+            "type": "u64"
           }
         ]
       }

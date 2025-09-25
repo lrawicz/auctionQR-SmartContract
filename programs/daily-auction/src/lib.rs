@@ -37,4 +37,9 @@ pub mod daily_auction {
     pub fn end_and_start_auction(ctx: Context<EndAndStartAuction>, new_content: String) -> Result<()> {
         processor::end_and_start_auction(ctx, new_content)
     }
+
+    pub fn set_auction_number(ctx: Context<SetAuctionNumber>, auction_number: u64) -> Result<()> {
+        processor::set_auction_number(ctx, auction_number)
+    }
+
 }

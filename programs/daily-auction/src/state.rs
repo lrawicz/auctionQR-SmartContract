@@ -10,4 +10,6 @@ pub struct Auction {
     pub highest_bidder: Pubkey,
     pub is_active: bool,
     pub bump: u8,
+    pub old_highest_bid: u64,
+    pub auction_number: u64,
 }

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::{
-    contexts::{Bid, EndAuction, Initialize, StartAuction, SetAuthority, EndAndStartAuction}, 
+    contexts::{Bid, EndAuction, Initialize, StartAuction, SetAuthority, EndAndStartAuction,SetAuctionNumber}, 
     error::AuctionError, 
     event::BidPlaced, event::AuctionEnded
 };
@@ -13,27 +13,35 @@ pub fn initialize(ctx: Context<Initialize>, initial_content: String) -> Result<(
     auction.old_content = initial_content.clone();
     auction.new_content = initial_content;
 
+    const SECONDS_IN_A_DAY: i64 = 86400; // 24 * 60 * 60
     let clock = Clock::get()?;
-    auction.end_timestamp = clock.unix_timestamp + (24 * 60 * 60); // 24 horas
+    let current_timestamp = clock.unix_timestamp;
+    let start_of_current_day_utc = current_timestamp - (current_timestamp % SECONDS_IN_A_DAY);
+    auction.end_timestamp = start_of_current_day_utc + SECONDS_IN_A_DAY;
     auction.is_active = true;
     auction.highest_bid = 0;
     auction.highest_bidder = Pubkey::default();
     auction.bump = ctx.bumps.auction;
-
+    auction.auction_number = 0;
     Ok(())
 }
+
+
 
 pub fn start_auction(ctx: Context<StartAuction>, new_content:String) -> Result<()> {
     let auction = &mut ctx.accounts.auction;
     require!(!auction.is_active, AuctionError::AuctionAlreadyActive);
 
+    const SECONDS_IN_A_DAY: i64 = 86400; // 24 * 60 * 60
     let clock = Clock::get()?;
-    auction.end_timestamp = clock.unix_timestamp + (24 * 60 * 60); // 24 horas
+    let current_timestamp = clock.unix_timestamp;
+    let start_of_current_day_utc = current_timestamp - (current_timestamp % SECONDS_IN_A_DAY);
+    auction.end_timestamp = start_of_current_day_utc + SECONDS_IN_A_DAY;
     auction.is_active = true;
     auction.highest_bid = 0;
     auction.new_content = new_content;
     auction.highest_bidder = Pubkey::default();
-
+    auction.auction_number += 1;
     msg!("Nueva subasta iniciada. Finaliza en 24 horas.");
     Ok(())
 }
@@ -66,6 +74,7 @@ pub fn end_auction(ctx: Context<EndAuction>) -> Result<()> {
     auction.is_active = false;
     auction.old_content = auction.new_content.clone();
     auction.new_content = String::new();
+    auction.old_highest_bid = auction.highest_bid;
     auction.highest_bid = 0;
     auction.highest_bidder = Pubkey::default();
 
@@ -80,7 +89,7 @@ pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
     require!(amount > auction.highest_bid, AuctionError::BidTooLow);
     require!(new_content.len() <= 250, AuctionError::ContentTooLong);
     
-    //require!(auction.end_timestamp > Clock::get()?.unix_timestamp, AuctionError::AuctionEnded);
+    require!(auction.end_timestamp > Clock::get()?.unix_timestamp, AuctionError::AuctionEnded);
 
     let previous_bid = auction.highest_bid;
 
@@ -115,7 +124,7 @@ pub fn bid(ctx: Context<Bid>, amount: u64, new_content: String) -> Result<()> {
         bidder: ctx.accounts.bidder.key().clone(),
         old_bidder: ctx.accounts.old_bidder.key().clone(),
         amount,
-        new_content: auction.new_content.clone(),
+        new_content: new_content.clone(),
     });
     
     // --- Update auction state ---
@@ -136,6 +145,7 @@ pub fn end_and_start_auction(ctx: Context<EndAndStartAuction>, new_content: Stri
 
     // --- End Auction Logic ---
     require!(auction.is_active, AuctionError::AuctionNotActive);
+    //require!(auction.end_timestamp < Clock::get()?.unix_timestamp, AuctionError::AuctionNotOver); 
 
     if auction.highest_bid > 0 {
         let amount_to_pay = auction.highest_bid;
@@ -164,12 +174,26 @@ pub fn end_and_start_auction(ctx: Context<EndAndStartAuction>, new_content: Stri
 
     // --- Start New Auction Logic ---
     let clock = Clock::get()?;
-    auction.end_timestamp = clock.unix_timestamp + (24 * 60 * 60); // 24 horas
+    // Constante para legibilidad. El tipo i64 coincide con el de unix_timestamp.
+
+    const SECONDS_IN_A_DAY: i64 = 86400; // 24 * 60 * 60
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp;
+    let start_of_current_day_utc = current_timestamp - (current_timestamp % SECONDS_IN_A_DAY);
+    auction.end_timestamp = start_of_current_day_utc + SECONDS_IN_A_DAY;
+        
     auction.is_active = true;
     auction.highest_bid = 0;
     auction.new_content = new_content;
     auction.highest_bidder = Pubkey::default();
+    auction.auction_number += 1;
 
     msg!("New auction started. Ends in 24 hours.");
+    Ok(())
+}
+
+pub fn set_auction_number(ctx: Context<SetAuctionNumber>, auction_number: u64) -> Result<()> {
+    let auction = &mut ctx.accounts.auction;
+    auction.auction_number = auction_number;
     Ok(())
 }

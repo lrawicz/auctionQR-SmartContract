@@ -1,13 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 //import { DailyAuction } from "../target/types/daily_auction";
-import { DailyAuction } from "../idls/types";
+import { DailyAuction as DailyAuctionDevnet } from "../idls/types_devnet";
 import * as fs from 'fs';
 import * as os from 'os';
 import { networks } from "./interfaces";
+import { Client } from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export class QrAuction{
-    program:Program<DailyAuction>;
+    program:Program<DailyAuctionDevnet>;
     provider:anchor.Provider;
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
@@ -18,7 +21,7 @@ export class QrAuction{
       if(network=="localnet"){
         this.provider = anchor.AnchorProvider.env()
         anchor.setProvider(this.provider);
-        this.program = anchor.workspace.DailyAuction as Program<DailyAuction>;
+        this.program = anchor.workspace.DailyAuction as Program<DailyAuctionDevnet>;
       }else{
         try{
         const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(network), 'confirmed');
@@ -34,9 +37,9 @@ export class QrAuction{
             anchor.AnchorProvider.defaultOptions()
         );
         // this.provider = anchor.AnchorProvider.env()
-        this.program = new Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>( 
+        this.program = new Program <Omit<DailyAuctionDevnet, 'address'> & { address: typeof idl.address }>( 
           // this.program = new Program <DailyAuction>(
-            idl as DailyAuction, 
+            idl as DailyAuctionDevnet, 
             this.provider,
           );
         }catch(error){
@@ -107,6 +110,7 @@ export class QrAuction{
             systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
+        await this.write_winHistory_inDB();
 
     }
     async getData():Promise<{
@@ -114,13 +118,30 @@ export class QrAuction{
       newContent: string;
       oldContent: string;
       endTimestamp: anchor.BN;
-      highestBid: anchor.BN;
+      highestBid: number;
       highestBidder: anchor.web3.PublicKey;
+      oldHighestBid: anchor.BN;
+      auctionNumber:anchor.BN;
       isActive: boolean;
       bump: number;
     }>{
       try{
-        return await this.program.account.auction.fetch(this.auctionPda).catch(error => {
+        return await this.program.account.auction.fetch(this.auctionPda)
+        .then(data => {
+          return {
+            authority:data.authority,
+            newContent:data.newContent,
+            oldContent:data.oldContent,
+            endTimestamp:data.endTimestamp,
+            highestBid:Number(data.highestBid),
+            highestBidder:data.highestBidder,
+            oldHighestBid:data.oldHighestBid,
+            auctionNumber:data.auctionNumber,
+            isActive:data.isActive,
+            bump:data.bump,
+          }
+        }) 
+        .catch(error => {
           throw error;
         });
       }catch(error){
@@ -152,17 +173,76 @@ export class QrAuction{
         );
         anchor.setProvider(newProvider);
         this.provider = newProvider;
-        this.program = new Program<DailyAuction>(this.program.idl, newProvider);
+        this.program = new Program<DailyAuctionDevnet>(this.program.idl, newProvider);
+    }
+
+    async setAuctionNumber(newAuctionNumber:number){
+      try{
+        await this.program.methods
+        .setAuctionNumber(new anchor.BN(newAuctionNumber))
+        .accounts({
+          auction: this.auctionPda,
+          authority: this.authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      }catch(error){
+        throw error;
+      }
     }
 
     async endAndStartAuction(newContent: string) {
+      try{
+
         await this.program.methods
-            .endAndStartAuction(newContent)
-            .accounts({
-                auction: this.auctionPda,
-                authority: this.authority.publicKey,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .rpc();
+        .endAndStartAuction(newContent)
+        .accounts({
+          auction: this.auctionPda,
+          authority: this.authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+        await this.write_winHistory_inDB();
+      }catch(error){
+        throw error;
+      }
     }
-}
+    private async write_winHistory_inDB() {
+      try{
+        const yesterday = new Date(new Date().setDate(new Date().getDate() - 1));
+        const year = yesterday.getFullYear();
+        const month = (yesterday.getMonth() + 1).toString().padStart(2, '0');
+        const day = yesterday.getDate().toString().padStart(2, '0');
+        const room = `bidroom_${year}-${month}-${day}`;
+
+        const contractData =await this.getData()
+        const client = new Client({
+          user: process.env.PG_USER,
+          host: process.env.PG_HOST,
+          database: process.env.PG_DATABASE,
+          password: process.env.PG_PASSWORD,
+          port: parseInt(process.env.PG_PORT || '5432', 10),
+        });
+        try {
+          await client.connect();
+          const insertQuery = `INSERT INTO auction_win_history(room,amount,url,auction_number) 
+                                VALUES($1,$2,$3,$4) 
+                                ON CONFLICT (room) 
+                                DO UPDATE 
+                                SET 
+                                amount = EXCLUDED.amount, 
+                                url = EXCLUDED.url,
+                                auction_number = EXCLUDED.auction_number`;
+          await client.query(insertQuery, [room,Number(contractData.oldHighestBid),contractData.oldContent,Number(contractData.auctionNumber)]);
+          console.log(`Inserted into auction_win_history: room = ${room}`);
+        } catch (dbError) {
+          console.error("Error inserting into PostgreSQL:", dbError);
+        } finally {
+          await client.end();
+        }
+      }catch(error){
+      throw error;
+    }
+    } 
+
+  }

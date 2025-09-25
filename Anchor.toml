@@ -13,7 +13,7 @@ daily_auction = "7o6VPgbp3FwH368f6vrbHVgKyuDBfdxFhTpqqAc5cwGR"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

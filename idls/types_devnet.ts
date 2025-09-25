@@ -222,6 +222,59 @@ export type DailyAuction = {
       ]
     },
     {
+      "name": "setAuctionNumber",
+      "discriminator": [
+        28,
+        133,
+        185,
+        121,
+        127,
+        157,
+        75,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auctionNumber",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "setAuthority",
       "discriminator": [
         133,
@@ -440,6 +493,14 @@ export type DailyAuction = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "oldHighestBid",
+            "type": "u64"
+          },
+          {
+            "name": "auctionNumber",
+            "type": "u64"
           }
         ]
       }

@@ -85,3 +85,17 @@ pub struct EndAndStartAuction<'info> {
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
+
+#[derive(Accounts)]
+pub struct SetAuctionNumber<'info> {
+    #[account(
+        mut,
+        seeds = [b"auction".as_ref()],
+        bump = auction.bump,
+        has_one = authority
+    )]
+    pub auction: Account<'info, Auction>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
