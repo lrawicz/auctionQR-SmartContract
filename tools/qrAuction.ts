@@ -1,29 +1,43 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 //import { DailyAuction } from "../target/types/daily_auction";
-import { DailyAuction as DailyAuctionDevnet } from "../idls/types_devnet";
+import { DailyAuction as DailyAuctionDevnet } from "../idls/devnet/types";
+import { DailyAuction as DailyAuctionMainnet } from "../idls/mainnet/types";
 import * as fs from 'fs';
 import * as os from 'os';
-import { networks } from "./interfaces";
 import { Client } from 'pg';
-import 'dotenv/config';
+import { settings } from "./settings";
 
+interface AuctionData
+{
+      authority: anchor.web3.PublicKey;
+      newContent: string;
+      oldContent: string;
+      endTimestamp: anchor.BN;
+      highestBid: number;
+      highestBidder: anchor.web3.PublicKey;
+      oldHighestBid: anchor.BN;
+      auctionNumber:anchor.BN;
+      isActive: boolean;
+      bump: number;
+  }
 export class QrAuction{
-    program:Program<DailyAuctionDevnet>;
+    program:Program<DailyAuctionDevnet|DailyAuctionMainnet>;
     provider:anchor.Provider;
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
     programId:anchor.web3.PublicKey;
-    constructor(network:networks="localnet",idl:any|undefined=undefined){
+    constructor(localnet:boolean=false){
 //      const  dynamicDalyAuction = anchor.workspace.DailyAuction as Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>;
       
-      if(network=="localnet"){
+      if(localnet){
         this.provider = anchor.AnchorProvider.env()
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuctionDevnet>;
       }else{
         try{
-        const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(network), 'confirmed');
+        // Create a provider and set it
+        const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(settings.solana.networkSelected), 'confirmed');
         const home = os.homedir();
         const walletPath = `${home}/.config/solana/id.json`;
         const keypair = anchor.web3.Keypair.fromSecretKey(
@@ -36,11 +50,22 @@ export class QrAuction{
             anchor.AnchorProvider.defaultOptions()
         );
         // this.provider = anchor.AnchorProvider.env()
-        this.program = new Program <Omit<DailyAuctionDevnet, 'address'> & { address: typeof idl.address }>( 
-          // this.program = new Program <DailyAuction>(
-            idl as DailyAuctionDevnet, 
-            this.provider,
-          );
+        const networkConfig = settings.solana.networks[settings.solana.networkSelected];
+        const idlPath = `${process.cwd()}/${networkConfig.idl}`;
+        const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
+
+        if (settings.solana.networkSelected === "devnet") {
+            this.program = new Program<Omit<DailyAuctionDevnet, 'address'> & { address: typeof idl.address }>(
+                idl as DailyAuctionDevnet,
+                this.provider,
+            );
+        } else if (settings.solana.networkSelected === "mainnet-beta") {
+            this.program = new Program<Omit<DailyAuctionMainnet, 'address'> & { address: typeof idl.address }>(
+                idl as DailyAuctionMainnet,
+                this.provider,
+            );
+        }
+
         }catch(error){
           console.log(error)
         } 
@@ -101,6 +126,7 @@ export class QrAuction{
        
     }
     async end_auction(){
+        const contractData =await this.getData()
         await this.program.methods
         .endAuction()
         .accounts({
@@ -109,21 +135,11 @@ export class QrAuction{
             systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
-        await this.write_winHistory_inDB();
+
+        await this.write_winHistory_inDB(contractData);
 
     }
-    async getData():Promise<{
-      authority: anchor.web3.PublicKey;
-      newContent: string;
-      oldContent: string;
-      endTimestamp: anchor.BN;
-      highestBid: number;
-      highestBidder: anchor.web3.PublicKey;
-      oldHighestBid: anchor.BN;
-      auctionNumber:anchor.BN;
-      isActive: boolean;
-      bump: number;
-    }>{
+    async getData():Promise<AuctionData>{
       try{
         return await this.program.account.auction.fetch(this.auctionPda)
         .then(data => {
@@ -151,6 +167,10 @@ export class QrAuction{
       return await this.provider.connection.getBalance(
           this.auctionPda
         );
+    }
+
+    getContractAddress(): anchor.web3.PublicKey {
+        return this.auctionPda;
     }
 
     async setAuthority(newAuthority:string){
@@ -192,7 +212,7 @@ export class QrAuction{
 
     async endAndStartAuction(newContent: string) {
       try{
-
+        const contractData =await this.getData()
         await this.program.methods
         .endAndStartAuction(newContent)
         .accounts({
@@ -201,12 +221,12 @@ export class QrAuction{
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
-        await this.write_winHistory_inDB();
+        await this.write_winHistory_inDB(contractData);
       }catch(error){
         throw error;
       }
     }
-    private async write_winHistory_inDB() {
+    private async write_winHistory_inDB(acutionData:AuctionData) {
       try{
         const yesterday = new Date(new Date().setDate(new Date().getDate() - 1));
         const year = yesterday.getFullYear();
@@ -214,13 +234,12 @@ export class QrAuction{
         const day = yesterday.getDate().toString().padStart(2, '0');
         const room = `bidroom_${year}-${month}-${day}`;
 
-        const contractData =await this.getData()
         const client = new Client({
-          user: process.env.PG_USER,
-          host: process.env.PG_HOST,
-          database: process.env.PG_DATABASE,
-          password: process.env.PG_PASSWORD,
-          port: parseInt(process.env.PG_PORT || '5432', 10),
+          user: settings.db.user,
+          host: settings.db.host,
+          database: settings.db.database,
+          password: settings.db.password,
+          port: settings.db.port,
         });
         try {
           await client.connect();
@@ -232,7 +251,7 @@ export class QrAuction{
                                 amount = EXCLUDED.amount, 
                                 url = EXCLUDED.url,
                                 auction_number = EXCLUDED.auction_number`;
-          await client.query(insertQuery, [room,Number(contractData.oldHighestBid),contractData.oldContent,Number(contractData.auctionNumber)]);
+          await client.query(insertQuery, [room,Number(acutionData.highestBid),acutionData.newContent,Number(acutionData.auctionNumber)]);
           console.log(`Inserted into auction_win_history: room = ${room}`);
         } catch (dbError) {
           console.error("Error inserting into PostgreSQL:", dbError);

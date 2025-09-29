@@ -1,0 +1,10 @@
+Deploying cluster: https://api.mainnet-beta.solana.com
+Upgrade authority: /var/lib/auction/.config/solana/id.json
+Deploying program "daily_auction"...
+Program path: /var/lib/auction/qrAuction/smartContract/target/deploy/daily_auction.so...
+Program Id: FtqmpF6VR9C4hxfboSD7VdPxYXRz4G395b6yLvoBALT1
+
+Signature: 5Xt2YXQ8Wttu12obErLuQ7VUe5xhTDenbW9hLuKuQKvAimw2C3mjrAd6hkB8D6sFx9CKKn21FcKhXFSEXcqiVYuy
+
+Deploy success
+

@@ -1,13 +1,6 @@
 import inquirer from 'inquirer';
 import { QrAuction } from '../tools/qrAuction';
-import fs from 'fs';
 async function  main(){
-  const idlsData = await fs.readdirSync('./idls')
-                      .filter(file => file.endsWith('.json'))
-                      .reduce((acc, file) => {
-                        acc[file] = JSON.parse(fs.readFileSync(`./idls/${file}`, 'utf8'));
-                        return acc;
-                      }, {} as any)
   await inquirer
     .prompt([
       {
@@ -15,13 +8,6 @@ async function  main(){
         name: 'network',
         message: 'Select the network',
         choices: ['localnet', 'devnet', 'mainnet-beta'],
-      },
-      {
-        type: 'list',
-        name: 'idl',
-        message: 'select idl',
-        choices: [...Object.keys(idlsData).map((file) => `${file} (${idlsData[file].address})`)],
-
       },
       {
         type: 'list',
@@ -33,14 +19,12 @@ async function  main(){
     .then(async (answers) => {
       try{
 
-      const idlFile =  answers.idl.split(" ")[0]
+      const smartContract = new QrAuction( );
       console.log("------------")
       console.log("  network: ", answers.network);
-      console.log("  IDL: ", idlFile);
-      console.log("  adddress: ", idlsData[idlFile].address);
+      console.log("  adddress: ", smartContract.getContractAddress());
       console.log("  command: ", answers.command);
       console.log("------------")
-      const smartContract = new QrAuction(answers.network,idlsData[idlFile] );
       switch(answers.command){
           case "init":
               await smartContract.initialize({initialContent:"Initial Content"})
