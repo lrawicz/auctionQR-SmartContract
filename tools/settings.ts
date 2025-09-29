@@ -41,4 +41,4 @@ export const settings:settingsType= {
         password:process.env.PG_PASSWORD || 'password',
         port:parseInt(process.env.PG_PORT || '5432', 10)
     }
-}
+} as const

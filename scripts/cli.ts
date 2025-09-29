@@ -13,17 +13,23 @@ async function  main(){
         type: 'list',
         name: 'command',
         message: 'Select the command',
-        choices: ['init', 'start', 'end','getData', 'set-authority', 'reset','set-auction-number'],
+        choices: [
+          'getContractAddress','getBalance','getData',
+          'set-authority', 'set-auction-number',
+          'init', 'start', 'end', 'reset'
+        ],
+        loop:false
       },
     ])
     .then(async (answers) => {
       try{
 
-      const smartContract = new QrAuction( );
+      const smartContract = new QrAuction(answers.network );
       console.log("------------")
       console.log("  network: ", answers.network);
-      console.log("  adddress: ", smartContract.getContractAddress());
-      console.log("  command: ", answers.command);
+      console.log("  programID: ", smartContract.getProgramId().toBase58());
+      console.log("  adddress: ", smartContract.getContractAddress().toBase58());
+      console.log("  command: ", answers.command+ "() ");
       console.log("------------")
       switch(answers.command){
           case "init":
@@ -52,6 +58,13 @@ async function  main(){
             await smartContract.setAuthority(userInput_01.newAuthority)
             .then(() => console.log("Authority updated"))
             .catch(err => console.error(err));
+          break;
+          case "getContractAddress":
+            console.log("Contract address: ", smartContract.getContractAddress().toBase58())
+          break;
+          case "getBalance":
+            const balance = await smartContract.getBalance()
+            console.log("Contract balance: ", balance)
           break;
           case "set-auction-number":
             const userInput_setAuctionNumber = await inquirer.prompt([{type:"input", name:"newAuctionNumber", message:"new auction index number"}])

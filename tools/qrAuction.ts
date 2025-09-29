@@ -27,17 +27,18 @@ export class QrAuction{
     auctionPda:anchor.web3.PublicKey;
     authority:anchor.Wallet;
     programId:anchor.web3.PublicKey;
-    constructor(localnet:boolean=false){
+    constructor(networkParam?: anchor.web3.Cluster | "localnet"){
 //      const  dynamicDalyAuction = anchor.workspace.DailyAuction as Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>;
       
-      if(localnet){
+      if(networkParam === "localnet"){
         this.provider = anchor.AnchorProvider.env()
         anchor.setProvider(this.provider);
         this.program = anchor.workspace.DailyAuction as Program<DailyAuctionDevnet>;
       }else{
         try{
         // Create a provider and set it
-        const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(settings.solana.networkSelected), 'confirmed');
+        const networkSelected = networkParam? networkParam: settings.solana.networkSelected;
+        const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl(networkSelected), 'confirmed');
         const home = os.homedir();
         const walletPath = `${home}/.config/solana/id.json`;
         const keypair = anchor.web3.Keypair.fromSecretKey(
@@ -50,16 +51,16 @@ export class QrAuction{
             anchor.AnchorProvider.defaultOptions()
         );
         // this.provider = anchor.AnchorProvider.env()
-        const networkConfig = settings.solana.networks[settings.solana.networkSelected];
+        const networkConfig = settings.solana.networks[networkSelected];
         const idlPath = `${process.cwd()}/${networkConfig.idl}`;
         const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
 
-        if (settings.solana.networkSelected === "devnet") {
+        if (networkSelected === "devnet") {
             this.program = new Program<Omit<DailyAuctionDevnet, 'address'> & { address: typeof idl.address }>(
                 idl as DailyAuctionDevnet,
                 this.provider,
             );
-        } else if (settings.solana.networkSelected === "mainnet-beta") {
+        } else if (networkSelected === "mainnet-beta") {
             this.program = new Program<Omit<DailyAuctionMainnet, 'address'> & { address: typeof idl.address }>(
                 idl as DailyAuctionMainnet,
                 this.provider,
@@ -171,6 +172,9 @@ export class QrAuction{
 
     getContractAddress(): anchor.web3.PublicKey {
         return this.auctionPda;
+    }
+    getProgramId(): anchor.web3.PublicKey {
+        return this.program.programId;
     }
 
     async setAuthority(newAuthority:string){
