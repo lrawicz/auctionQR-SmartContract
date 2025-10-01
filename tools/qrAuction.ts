@@ -68,6 +68,7 @@ export class QrAuction{
                 idl as DailyAuctionMainnet,
                 this.provider,
             );
+            console.log("Program ID after initialization:", this.program.programId.toString());
         }
 
         }catch(error){
