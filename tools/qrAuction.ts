@@ -28,6 +28,8 @@ export class QrAuction{
     authority:anchor.Wallet;
     programId:anchor.web3.PublicKey;
     constructor(networkParam?: anchor.web3.Cluster | "localnet"){
+      console.log("networkParam")
+      console.log(networkParam)
 //      const  dynamicDalyAuction = anchor.workspace.DailyAuction as Program <Omit<DailyAuction, 'address'> & { address: typeof idl.address }>;
       
       if(networkParam === "localnet"){
@@ -56,12 +58,13 @@ export class QrAuction{
         const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
 
         if (networkSelected === "devnet") {
-            this.program = new Program<Omit<DailyAuctionDevnet, 'address'> & { address: typeof idl.address }>(
+            this.program = new Program<DailyAuctionDevnet>(
                 idl as DailyAuctionDevnet,
                 this.provider,
             );
         } else if (networkSelected === "mainnet-beta") {
-            this.program = new Program<Omit<DailyAuctionMainnet, 'address'> & { address: typeof idl.address }>(
+          console.log((idl as DailyAuctionMainnet).address)
+            this.program = new Program<DailyAuctionMainnet>(
                 idl as DailyAuctionMainnet,
                 this.provider,
             );
@@ -73,7 +76,6 @@ export class QrAuction{
 
       }
       anchor.setProvider(this.provider);
-      
       // this.programId = idl? new anchor.web3.PublicKey(idl.address):this.program.programId;
       // Keypairs for the test
       this.authority = this.provider.wallet as anchor.Wallet;
@@ -87,6 +89,9 @@ export class QrAuction{
       }
     }
     async initialize(params:{initialContent:string}){
+      console.log("initialize")
+      console.log(this.program.idl.address)
+      console.log(this.program.rawIdl.address)
         await this.program.methods
           .initialize(params.initialContent)
           .accounts({
